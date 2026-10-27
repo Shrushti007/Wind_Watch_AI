@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WindWatch AI – Wind Turbine Status Prediction</title>
+<meta name="description" content="Machine-learning web app that predicts wind turbine operating status from SCADA sensor data.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌬️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<!-- ===== NAV ===== -->
+<header class="nav">
+  <a class="brand" href="#top"><span class="brand-mark">🌬️</span> WindWatch <b>AI</b></a>
+  <nav>
+    <a href="#predict">Predict</a>
+    <a href="#how">How it works</a>
+    <a href="#model">Model</a>
+    <!-- <a href="#deploy">Deployment</a> -->
+  </nav>
+</header>
+
+<!-- ===== HERO ===== -->
+<section class="hero" id="top">
+  <div class="hero-text">
+    <span class="pill">Capstone project · Machine Learning · AWS</span>
+    <h1>Know what your wind turbine is doing — <span class="grad">before you climb the tower.</span></h1>
+    <p>WindWatch AI reads a turbine's SCADA sensor readings and predicts its operating status in milliseconds.
+       Enter a single reading, paste a full row, or upload an entire dataset.</p>
+    <div class="cta">
+      <a class="btn primary" href="#predict">Try the predictor</a>
+      <a class="btn ghost" href="#how">See how it works</a>
+    </div>
+    <div class="stats" id="heroStats"></div>
+  </div>
+
+  <!-- animated turbines -->
+  <div class="hero-art" aria-hidden="true">
+    <svg viewBox="0 0 600 420" preserveAspectRatio="xMidYMax meet">
+      <defs>
+        <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14405a"/><stop offset="1" stop-color="#0a2236"/></linearGradient>
+        <g id="turbine">
+          <path d="M-5,0 L5,0 L9,210 L-9,210 Z" fill="#e8f4f8"/>
+          <g>
+            <path id="blade" d="M0,0 C-7,-14 -6,-60 0,-120 C6,-60 7,-14 0,0 Z" fill="#f4fbfd"/>
+            <use href="#blade" transform="rotate(120)"/>
+            <use href="#blade" transform="rotate(240)"/>
+            <circle r="9" fill="#38e1d0"/><circle r="4" fill="#0b2a3d"/>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="9s" repeatCount="indefinite"/>
+          </g>
+        </g>
+      </defs>
+      <path d="M0,420 L0,372 Q300,318 600,372 L600,420 Z" fill="url(#hill)"/>
+      <use href="#turbine" transform="translate(120,160) scale(.62)" opacity=".55"/>
+      <use href="#turbine" transform="translate(470,150) scale(.7)" opacity=".7"/>
+      <use href="#turbine" transform="translate(300,120) scale(1.05)"/>
+    </svg>
+  </div>
+</section>
+
+<!-- ===== PREDICT ===== -->
+<section class="section" id="predict">
+  <div class="section-head">
+    <h2>Predict turbine status</h2>
+    <p>Choose how you want to give the model its data. Any sensor you leave out is filled with its typical (median) training value.</p>
+  </div>
+
+  <div class="card">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="single">① Single reading</button>
+      <button class="tab" data-tab="paste">② Paste a full row</button>
+      <button class="tab" data-tab="upload">③ Upload dataset</button>
+    </div>
+
+    <!-- TAB 1 -->
+    <div class="panel active" id="tab-single">
+      <div class="split">
+        <div>
+          <div class="toolbar">
+            <select id="sampleSelect" title="Load a real row from the hold-out set"><option value="">Load a real sample row…</option></select>
+            <button class="btn small ghost" id="resetBtn" type="button">Reset to typical values</button>
+          </div>
+          <h4 class="mini">Key inputs <span class="muted">(most influential sensors)</span></h4>
+          <div class="fields" id="keyFields"></div>
+          <button class="linkbtn" id="toggleAll" type="button">Show all <span id="nAll"></span> features ▾</button>
+          <div class="fields hidden" id="allFields"></div>
+          <button class="btn primary wide" id="predictBtn" type="button">Predict status</button>
+        </div>
+        <div id="resultSingle" class="result-box"></div>
+      </div>
+    </div>
+
+    <!-- TAB 2 -->
+    <div class="panel" id="tab-paste">
+      <div class="split">
+        <div>
+          <p class="muted">Paste <b>one row</b> as JSON, or as CSV (header line + one value line). Columns you don't supply are filled automatically.</p>
+          <textarea id="pasteBox" spellcheck="false" placeholder='{"wind_speed_3_avg": 8.4, "power_29_avg": 0.62, "asset_id": 21, "hour": 14, "month": 6}'></textarea>
+          <div class="toolbar">
+            <button class="btn primary" id="pasteBtn" type="button">Predict row</button>
+            <button class="btn small ghost" id="pasteSample" type="button">Insert example row</button>
+          </div>
+        </div>
+        <div id="resultPaste" class="result-box"></div>
+      </div>
+    </div>
+
+    <!-- TAB 3 -->
+    <div class="panel" id="tab-upload">
+      <label class="drop" id="drop">
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
+        <div class="drop-icon">⬆</div>
+        <div><b>Drop your dataset here</b> or click to browse</div>
+        <div class="muted" id="fileName">CSV or Excel · up to 40 MB · first 50,000 rows are scored</div>
+      </label>
+      <div class="toolbar center">
+        <button class="btn primary" id="uploadBtn" type="button" disabled>Run predictions</button>
+        <a class="btn small ghost" href="/sample">Download sample file</a>
+      </div>
+      <p class="muted center small">Tip: include <code>time_stamp</code> and <code>asset_id</code> columns. If a <code>status_type_id</code> column is present, the app also reports accuracy against it.</p>
+      <div id="uploadResult"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== HOW IT WORKS ===== -->
+<section class="section alt" id="how">
+  <div class="section-head">
+    <h2>How the project works</h2>
+    <p>From a raw Excel file to a live web application — the full machine-learning lifecycle.</p>
+  </div>
+  <div class="steps">
+    <div class="step"><span>1</span><h4>Collect</h4><p>160K+ ten-minute SCADA readings from two turbines, 80+ sensors each.</p></div>
+    <div class="step"><span>2</span><h4>Clean</h4><p>Remove empty and repeated header rows, fix data types, drop constant columns.</p></div>
+    <div class="step"><span>3</span><h4>Transform</h4><p>Create time features, encode the target, remove duplicate-information sensors.</p></div>
+    <div class="step"><span>4</span><h4>Explore</h4><p>Eight EDA charts reveal how wind, power and sensors differ by status.</p></div>
+    <div class="step"><span>5</span><h4>Model</h4><p>Four algorithms compared on a hold-out set using macro-F1 for imbalanced classes.</p></div>
+    <div class="step"><span>6</span><h4>Deploy</h4><p>Pipeline saved with joblib, served by Flask + Gunicorn on AWS.</p></div>
+  </div>
+</section>
+
+<!-- ===== MODEL ===== -->
+<section class="section" id="model">
+  <div class="section-head">
+    <h2>The model</h2>
+    <p>Four algorithms were trained and compared on data the model had never seen.</p>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h4 class="mini">Model comparison (hold-out set)</h4>
+      <div class="table-wrap"><table class="tbl" id="metricsTable"></table></div>
+      <p class="muted small" id="whyBest"></p>
+    </div>
+    <div class="card">
+      <h4 class="mini">Top sensors driving the prediction</h4>
+      <div id="importanceBars"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== DEPLOY ===== -->
+<!-- <section class="section alt" id="deploy">
+  <div class="section-head">
+    <h2>How it is deployed on AWS</h2>
+    <p>A trained model is just a file — deployment wraps it in a web service so anyone can use it.</p>
+  </div> -->
+  <!-- <div class="arch">
+    <div class="node">🌐<b>Browser</b><small>HTML · CSS · JS</small></div><div class="arrow">→</div>
+    <div class="node">⚖️<b>AWS load balancer</b><small>Elastic Beanstalk / App Runner</small></div><div class="arrow">→</div>
+    <div class="node">🐍<b>Gunicorn + Flask</b><small>application.py</small></div><div class="arrow">→</div>
+    <div class="node">📦<b>joblib pipeline</b><small>impute · scale · predict</small></div>
+  </div>
+  <div class="grid3">
+    <div class="card"><h4>1 · Serialise</h4><p>The notebook saves the whole scikit-learn pipeline plus metadata into <code>wind_turbine_model.joblib</code>.</p></div>
+    <div class="card"><h4>2 · Serve</h4><p>Flask exposes <code>/api/predict</code> and <code>/api/predict_file</code>; Gunicorn runs it as a production server.</p></div>
+    <div class="card"><h4>3 · Host</h4><p>Elastic Beanstalk, EC2 or App Runner (Docker) host the app, with <code>/health</code> for health checks.</p></div>
+  </div> -->
+</section>
+
+<footer class="footer">
+  <div>🌬️ WindWatch AI · Wind Turbine Status Prediction · Capstone Project</div>
+  <div class="muted">Python · pandas · scikit-learn · Flask · Gunicorn · AWS</div>
+  <div class="muted">SHRUSHTI MALKAR</div>
+</footer>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
